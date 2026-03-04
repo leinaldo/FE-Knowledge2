@@ -59,6 +59,12 @@ export default withPwa(
       logo: "/logo/book.png",
       nav: [{ text: "首页", link: "/" }],
       sidebar,
+      socialLinks: [
+        {
+          icon: "github",
+          link: "https://github.com/Leinaldo/FE-Knowledge2",
+        },
+      ],
       footer: {
         message: "MIT Licensed",
         copyright: "Copyright © 2021-present Leinaldo",
