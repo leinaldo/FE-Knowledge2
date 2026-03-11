@@ -1,3 +1,389 @@
+## vue3响应式
+
+### 手写ref、reactive
+ref
+```js
+import { reactive } from './reactive.js'
+import { track, trigger } from './effect.js'
+
+
+export function ref(val) {  // 将原始类型数据变成响应式 引用类型也可以
+  return createRef(val)
+}
+
+function createRef(val) {
+  // 判断val是否已经是响应式
+  if (val.__v_isRef) {
+    return val
+  }
+
+  // 将val变为响应式
+  return new RefImpl(val)
+}
+
+
+ // const age = ref({n: 18})
+class RefImpl {  
+  constructor(val) {
+    this.__v_isRef = true // 给每一个被ref操作过的属性值都添加标记
+    this._value = convert(val)
+  }
+
+  get value() {
+    // 为this对象做依赖收集
+    track(this, 'value')
+    return this._value
+  }
+
+  set value(newVal) {
+    // console.log(newVal);
+    
+    if (newVal !== this._value) {
+      this._value = convert(newVal)
+      trigger(this, 'value') // 触发掉 'value' 上的所有副作用函数
+    }
+  }
+
+}
+
+function convert(val) {
+  if (typeof val !== 'object' || val === null) {  // 不是对象
+    return val
+  } else {
+    return reactive(val)
+  }
+}
+```
+
+reactive
+```js
+import { mutableHandlers } from './baseHandlers.js'
+
+// 保存被代理过的对象
+export const reactiveMap = new WeakMap() // new Map() // new WeakMap 对内存的回收更加友好
+
+
+export function reactive(target) { // 将target变成响应式
+    return createReactiveObject(target, reactiveMap, mutableHandlers)
+}
+
+
+export function createReactiveObject(target, proxyMap, proxyHandlers) { // 创建响应式的函数
+    // 判断target是不是一个引用类型
+    if (typeof target !== 'object' || target === null) {  // 不是对象就不给操作
+        return target
+    }
+
+    // 该对象是否已经被代理过(已经是响应式对象)
+    const existingProxy = proxyMap.get(target)
+    if (existingProxy) {
+        return existingProxy
+    }
+
+    // 执行代理操作（将target处理成响应式）
+    const proxy = new Proxy(target, proxyHandlers) // 第二个参数的作用：当target被读取值，设置值，判断值等等操作时会触发的函数
+
+    // 往 proxyMap 增加 proxy, 把已经代理过的对象缓存起来
+    proxyMap.set(target, proxy)
+
+    return proxy
+}
+```
+
+```js
+import { track, trigger } from './effect.js'
+const get = createGetter(); // 创建一个get函数
+const set = createSetter(); // 创建一个set函数
+
+function createGetter() {
+    return function get(target, key, receiver) {
+        console.log('target被读取值');
+        const res = Reflect.get(target, key, receiver); // 获取源对象中的键值
+        // 这个属性究竟还有哪些地方用到了，（副作用函数的收集，computed,watch...）
+        track(target, key)
+
+
+        return res;
+    }
+}
+
+function createSetter() {
+    return function set(target, key, value, receiver) {
+        console.log('target被设置值', key, value);
+        const res = Reflect.set(target, key, value, receiver); // 设置源对象中的键值 === target[key] = value
+
+
+        // 需要记录下来此时是哪一个key的值变更了，再去通知其他依赖该值的函数生效，更新浏览器的视图(响应式)
+        // 触发被修改的属性身上的副函数 依赖收集（被修改的key在哪些地方被使用了）发布订阅
+        trigger(target, key)
+        return res;
+    }
+}
+
+
+export const mutableHandlers = {
+    get,
+    set,
+}
+```
+### watchEffect 、computed、 render effect 的核心 —— ReactiveEffect
+
+Vue 3 的响应式系统核心就是 `ReactiveEffect` 这个类，三者都是它的上层封装：
+
+#### 继承关系
+```
+ReactiveEffect (核心)
+├── computed → ComputedRefImpl 内部持有一个 ReactiveEffect
+├── watchEffect → 直接创建 ReactiveEffect
+└── render effect → 组件渲染时创建的 ReactiveEffect
+```
+
+#### 各自的差异
+
+| | computed | watchEffect | render effect |
+|---|---|---|---|
+| **懒执行** | ✅ 懒（访问时才算） | ❌ 立即执行 | ❌ 立即执行 |
+| **缓存** | ✅ 有缓存 | ❌ 无 | ❌ 无 |
+| **scheduler** | 标记dirty，不立即重算 | queueFlush异步调度 | queueFlush异步调度 |
+| **返回值** | 有返回值 | 无 | 生成vdom |
+
+#### 核心机制都一样
+
+​```js
+// 本质上都在做这件事：
+const effect = new ReactiveEffect(fn, scheduler)
+effect.run() // 执行fn时，自动收集依赖（track）
+// 依赖变化时，触发scheduler或重新run（trigger）
+​```
+
+#### computed 特殊在哪
+
+computed 引入了 **dirty 标志** 做缓存控制：
+```
+依赖变化 → 不立即重算 → 只把 dirty 置为 true
+访问 .value → dirty为true才重算 → 再把dirty置false
+```
+
+#### render effect 特殊在哪
+
+组件挂载时，`mountComponent` 内部调用 `setupRenderEffect`，创建一个 ReactiveEffect，`fn` 就是组件的渲染函数，依赖变化时走 scheduler 排进异步队列，批量更新 DOM。
+
+---
+
+
+ReactiveEffect 核心
+```js
+let activeEffect = null  // 当前正在执行的effect
+
+class ReactiveEffect {
+  constructor(fn, scheduler = null) {
+    this.fn = fn
+    this.scheduler = scheduler  // 自定义调度，不传就直接重新run
+    this.deps = []              // 收集了哪些依赖
+    this.dirty = true           // computed用，标记是否需要重算
+  }
+
+  run() {
+    activeEffect = this         // 设置当前活跃effect
+    const result = this.fn()    // 执行fn，触发getter，自动track
+    activeEffect = null
+    return result
+  }
+
+  trigger() {
+    if (this.scheduler) {
+      this.scheduler()          // 有scheduler就走scheduler
+    } else {
+      this.run()                // 没有就直接重新执行
+    }
+  }
+}
+```
+
+track / trigger（响应式核心）
+```js
+const targetMap = new WeakMap()
+
+// 收集依赖：在getter里调用
+function track(target, key) {
+  if (!activeEffect) return     // 没有活跃effect，不收集
+  
+  let depsMap = targetMap.get(target)
+  if (!depsMap) targetMap.set(target, depsMap = new Map())
+  
+  let dep = depsMap.get(key)
+  if (!dep) depsMap.set(key, dep = new Set())
+  
+  dep.add(activeEffect)         // effect订阅这个key
+  activeEffect.deps.push(dep)   // effect也记录自己订阅了哪些
+}
+
+// 触发更新：在setter里调用
+function trigger(target, key) {
+  const depsMap = targetMap.get(target)
+  if (!depsMap) return
+  
+  const dep = depsMap.get(key)
+  dep?.forEach(effect => effect.trigger())
+}
+```
+
+watchEffect
+```js
+function watchEffect(fn) {
+  const effect = new ReactiveEffect(fn, () => {
+    // scheduler：异步调度，下一个tick执行
+    queueMicrotask(() => effect.run())
+  })
+  
+  effect.run()  // 立即执行一次，同时收集依赖
+  
+  return () => effect.stop()  // 返回停止函数
+}
+
+// 使用
+const count = ref(0)
+watchEffect(() => {
+  console.log(count.value)  // 访问.value触发track，收集依赖
+})
+count.value++  // 触发trigger → scheduler → 异步重新run
+```
+
+computed
+```js
+function computed(getter) {
+  let _value
+  
+  const effect = new ReactiveEffect(getter, () => {
+    // scheduler：依赖变化时，不立即重算，只标记dirty
+    if (!effect.dirty) {
+      effect.dirty = true
+      // 通知依赖这个computed的effect也要更新
+      triggerRefValue(computedRef)
+    }
+  })
+
+  const computedRef = {
+    get value() {
+      trackRefValue(computedRef)  // computed本身也被追踪
+      if (effect.dirty) {         // 只有dirty才重新计算
+        effect.dirty = false
+        _value = effect.run()
+      }
+      return _value
+    }
+  }
+  
+  return computedRef
+}
+
+// 使用
+const count = ref(1)
+const double = computed(() => count.value * 2)
+
+console.log(double.value)  // 执行getter，收集count依赖，dirty=false
+console.log(double.value)  // dirty=false，直接返回缓存，不重新计算！
+count.value = 2            // trigger → scheduler → dirty=true
+console.log(double.value)  // dirty=true，重新计算
+```
+
+render effect
+```js
+function mountComponent(vnode, container) {
+  const { render, setup } = vnode.type
+  const setupResult = setup()
+  
+  // 渲染effect：依赖变化时，异步重新渲染
+  const effect = new ReactiveEffect(
+    () => {
+      const subTree = render(setupResult)  // 执行render，收集依赖
+      patch(prevSubTree, subTree, container)
+      prevSubTree = subTree
+    },
+    () => {
+      // scheduler：不立即重渲染，进队列批量处理
+      queueJob(() => effect.run())
+    }
+  )
+  
+  effect.run()  // 首次挂载
+}
+```
+
+#### 串起来看
+```
+ref/reactive 的 getter  →  track(target, key)  →  dep.add(activeEffect)
+ref/reactive 的 setter  →  trigger(target, key) →  effect.trigger()
+                                                        ↓
+                                              有scheduler → scheduler()
+                                              没scheduler → effect.run()
+```
+四者的区别就是传给 ReactiveEffect 的 fn 和 scheduler 不同，核心的依赖收集和触发机制完全共用。
+
+
+
+
+
+
+
+### shallowRef、shallowReactive
+`shallowRef` 是 Vue 3 提供的一个"浅层"响应式 API，和 `ref`、`reactive` 的核心区别在于响应式追踪的深度。
+
+只对 `.value` 的赋值操作做响应式追踪，不会递归地将内部属性转为响应式。
+```js
+const state = shallowRef({ count: 0, nested: { a: 1 } })
+
+// ✅ 触发更新（替换整个 .value）
+state.value = { count: 1, nested: { a: 2 } }
+
+// ❌ 不会触发更新（修改内部属性）
+state.value.count = 10
+state.value.nested.a = 99
+```
+
+如果确实需要修改内部属性后触发更新，可以配合 `triggerRef(state)` 手动触发。
+
+#### 与 ref 的对比
+
+`ref` 会对 `.value` 做深层递归响应式转换（内部对象会被自动包一层 `reactive`）。
+```js
+const state = ref({ count: 0, nested: { a: 1 } })
+
+state.value.count = 10        // ✅ 触发更新
+state.value.nested.a = 99     // ✅ 也触发更新
+```
+
+所以 `ref` 等价于"自动深层代理"，而 `shallowRef` 只代理最外面那一层 `.value`。
+
+#### 与 reactive 的对比
+
+`reactive` 直接返回一个深层响应式代理对象，没有 `.value` 包装，但同样是深层追踪。
+```js
+const state = reactive({ count: 0, nested: { a: 1 } })
+
+state.count = 10       // ✅ 触发
+state.nested.a = 99    // ✅ 触发
+```
+
+`shallowRef` 和 `reactive` 的差异有两点：一是 `shallowRef` 有 `.value` 包装，二是 `shallowRef` 只做浅层追踪。类似地，Vue 也提供了 `shallowReactive`，作用是只追踪对象第一层属性的变化。
+
+#### 什么时候用 shallowRef
+
+主要有几个场景：
+
+- **性能优化** —— 当数据结构很大（比如几千条数据的列表、大型树结构），深层代理的开销明显时，用 `shallowRef` 可以避免不必要的递归代理，每次更新时直接替换整个 `.value` 即可。
+- **存放非响应式对象** —— 比如第三方库实例（ECharts 实例、地图实例、Web Worker 等），这些对象不应该被 Vue 代理，否则可能导致意外行为或性能问题。
+- **与不可变数据模式配合** —— 如果你的数据更新策略是"每次产生新对象而非原地修改"（类似 React 的 state 理念），`shallowRef` 就非常契合。
+
+#### 速查总结
+
+| 特性 | `ref` | `shallowRef` | `reactive` | `shallowReactive` |
+|------|-------|--------------|------------|-------------------|
+| `.value` 包装 | 是 | 是 | 否 | 否 |
+| 深层响应式 | 是 | 否 | 是 | 否 |
+| 触发更新方式 | 修改任意深度属性 | 替换 `.value` | 修改任意深度属性 | 修改第一层属性 |
+| 典型场景 | 通用 | 大数据/外部实例 | 通用对象 | 扁平对象优化 |
+
 ## dom diff核心算法——最长递增子序列
 
 

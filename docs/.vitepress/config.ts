@@ -15,12 +15,23 @@ const ignoreList = [
   "index.md",
   ".DS_Store",
   "dev-dist",
+  "好文阅读历史",
+  "实用库",
+  "plans",
 ];
 
 function buildChildren(path, parentName = "") {
   const files = fs
     .readdirSync(path)
-    .filter((file) => !ignoreList.includes(file));
+    .filter((file) => !ignoreList.includes(file))
+    // 忽略为空的文件夹
+    .filter((file) => {
+      const subPath = `${path}/${file}`;
+      return (
+        !fs.statSync(subPath).isDirectory() ||
+        fs.readdirSync(subPath).length > 0
+      );
+    });
   return files.map((file) => {
     let current = { text: file } as DefaultTheme.SidebarItem;
     const subPath = `${path}/${file}`;
@@ -58,6 +69,7 @@ export default withPwa(
     themeConfig: {
       logo: "/logo/book.png",
       nav: [{ text: "首页", link: "/" }],
+      outline: { level: [2, 3], label: "目录" },
       sidebar,
       socialLinks: [
         {
