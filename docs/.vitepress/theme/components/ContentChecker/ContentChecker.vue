@@ -8,6 +8,10 @@ const showPanel = ref(false)
 const selectedText = ref('')
 const dotPosition = ref({ x: 0, y: 0 })
 
+// 当 mousedown 时已有选区存在，说明本次点击意图是取消选区，
+// 即使 mouseup 时因微小拖动产生了新选区也不应显示圆点
+let isDismissing = false
+
 function getSelectionEnd(): { x: number; y: number } | null {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) return null
@@ -39,6 +43,12 @@ function onMouseUp(e: MouseEvent) {
     return
   }
 
+  // 本次点击是为了取消旧选区，忽略 mouseup 时可能产生的微小新选区
+  if (isDismissing) {
+    isDismissing = false
+    return
+  }
+
   const selection = window.getSelection()
   const text = selection?.toString().trim() || ''
 
@@ -55,6 +65,19 @@ function onMouseUp(e: MouseEvent) {
   showDot.value = true
 }
 
+function onMouseDown(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (target.closest('.checker-panel') || target.closest('.checker-dot')) return
+
+  // 如果 mousedown 时圆点正在显示，说明用户意图是取消选区
+  isDismissing = showDot.value
+
+  if (showPanel.value) {
+    showPanel.value = false
+  }
+  showDot.value = false
+}
+
 function onDotHoverEnter() {
   showPanel.value = true
 }
@@ -65,10 +88,12 @@ function onPanelClose() {
 }
 
 onMounted(() => {
+  document.addEventListener('mousedown', onMouseDown)
   document.addEventListener('mouseup', onMouseUp)
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onMouseDown)
   document.removeEventListener('mouseup', onMouseUp)
 })
 </script>
