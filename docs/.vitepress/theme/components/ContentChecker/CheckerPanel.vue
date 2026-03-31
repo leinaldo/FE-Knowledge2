@@ -6,13 +6,21 @@ import ApiKeySettings from './ApiKeySettings.vue'
 const STORAGE_KEY = 'content-checker-config'
 const MAX_TEXT_LENGTH = 2000
 
-const SYSTEM_PROMPT = `你是一个技术内容审核助手。请对以下选中的文本进行检查，关注以下三个方面：
+const CHECK_PROMPT = `你是一个技术内容审核助手。请对以下选中的文本进行检查，关注以下三个方面：
 
 1. **时效性**：内容是否过时？涉及的技术/API/工具是否已有更新版本或替代方案？
 2. **准确性**：技术描述是否正确？是否有常见误解或不严谨的表述？
 3. **链接有效性**：如果文本中包含 URL，指出这些链接（你无法访问链接，但可以根据 URL 模式判断是否可能失效）。
 
 请用简洁的中文回答，直接指出问题和建议，不需要重复原文。如果内容没有问题，简短说明即可。`
+
+const ENHANCE_PROMPT = `你是一个技术写作助手。请对以下选中的文本进行增强改写，要求：
+
+1. 修正所有技术错误和不准确的表述
+2. 补充过时内容的最新信息（如新版本、新API、替代方案）
+3. 保持原文的结构和风格，不要大幅改变行文方式
+4. 保持使用中文
+5. 直接输出改写后的内容，不要加任何前缀说明（如"以下是改写后的内容"）`
 
 const props = defineProps<{
   text: string
@@ -55,7 +63,7 @@ function getConfig() {
   return stored ? JSON.parse(stored) : null
 }
 
-async function checkContent() {
+async function streamRequest(systemPrompt: string) {
   if (!hasConfig()) {
     showSettings.value = true
     return
@@ -84,7 +92,7 @@ async function checkContent() {
         model: config.model,
         stream: true,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: inputText },
         ],
       }),
@@ -137,6 +145,14 @@ async function checkContent() {
     isLoading.value = false
     abortController = null
   }
+}
+
+function checkContent() {
+  streamRequest(CHECK_PROMPT)
+}
+
+function enhanceContent() {
+  streamRequest(ENHANCE_PROMPT)
 }
 
 function cancelRequest() {
@@ -249,6 +265,7 @@ onBeforeUnmount(() => {
     <!-- Footer -->
     <div v-if="!showSettings && (responseText || errorText)" class="panel-footer">
       <button class="btn-primary" @click="checkContent">重新检查</button>
+      <button class="btn-enhance" @click="enhanceContent" :disabled="isLoading">生成增强版</button>
       <button class="btn-ghost" @click="copyResult" :disabled="!responseText">复制结果</button>
     </div>
   </div>
@@ -378,6 +395,25 @@ onBeforeUnmount(() => {
 
 .btn-primary:hover {
   background: #4f46e5;
+}
+
+.btn-enhance {
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.btn-enhance:hover {
+  background: #059669;
+}
+
+.btn-enhance:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-ghost {
