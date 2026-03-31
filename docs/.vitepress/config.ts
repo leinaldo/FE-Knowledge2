@@ -18,6 +18,7 @@ const ignoreList = [
   "好文阅读历史",
   "实用库",
   "plans",
+  "superpowers",
 ];
 
 function buildChildren(path, parentName = "") {
