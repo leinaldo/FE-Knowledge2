@@ -22,8 +22,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  'hover-enter': []
-  'hover-leave': []
 }>()
 
 const { isDark } = useData()
@@ -218,8 +216,6 @@ onBeforeUnmount(() => {
       left: (dotX + dragOffset.x) + 'px',
       top: (dotY + 20 + dragOffset.y) + 'px',
     }"
-    @mouseenter="emit('hover-enter')"
-    @mouseleave="emit('hover-leave')"
   >
     <!-- Title bar (draggable) -->
     <div class="panel-header" @mousedown.prevent="onDragStart">

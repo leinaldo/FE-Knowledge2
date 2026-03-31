@@ -6,7 +6,6 @@ defineProps<{
 
 const emit = defineEmits<{
   'hover-enter': []
-  'hover-leave': []
 }>()
 </script>
 
@@ -15,7 +14,6 @@ const emit = defineEmits<{
     class="checker-dot"
     :style="{ left: x + 'px', top: y + 'px' }"
     @mouseenter="emit('hover-enter')"
-    @mouseleave="emit('hover-leave')"
   />
 </template>
 

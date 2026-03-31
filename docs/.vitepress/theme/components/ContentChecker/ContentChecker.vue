@@ -8,8 +8,6 @@ const showPanel = ref(false)
 const selectedText = ref('')
 const dotPosition = ref({ x: 0, y: 0 })
 
-let hideTimer: ReturnType<typeof setTimeout> | null = null
-
 function getSelectionEnd(): { x: number; y: number } | null {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) return null
@@ -26,27 +24,31 @@ function getSelectionEnd(): { x: number; y: number } | null {
 }
 
 function onMouseUp(e: MouseEvent) {
-  // Ignore clicks inside the checker components
   const target = e.target as HTMLElement
-  if (target.closest('.checker-dot') || target.closest('.checker-panel')) return
+
+  // Click inside panel — do nothing
+  if (target.closest('.checker-panel')) return
+
+  // Click inside dot — do nothing
+  if (target.closest('.checker-dot')) return
+
+  // Click outside panel while panel is open — close panel and dot
+  if (showPanel.value) {
+    showPanel.value = false
+    showDot.value = false
+    return
+  }
 
   const selection = window.getSelection()
   const text = selection?.toString().trim() || ''
 
   if (!text) {
-    // Clicked without selecting — hide dot if panel is not shown
-    if (!showPanel.value) {
-      showDot.value = false
-    }
+    showDot.value = false
     return
   }
 
   const pos = getSelectionEnd()
   if (!pos) return
-
-  // Reset state for new selection
-  showPanel.value = false
-  if (hideTimer) clearTimeout(hideTimer)
 
   selectedText.value = text
   dotPosition.value = pos
@@ -54,24 +56,7 @@ function onMouseUp(e: MouseEvent) {
 }
 
 function onDotHoverEnter() {
-  if (hideTimer) {
-    clearTimeout(hideTimer)
-    hideTimer = null
-  }
   showPanel.value = true
-}
-
-function onHoverLeave() {
-  hideTimer = setTimeout(() => {
-    showPanel.value = false
-  }, 300)
-}
-
-function onPanelHoverEnter() {
-  if (hideTimer) {
-    clearTimeout(hideTimer)
-    hideTimer = null
-  }
 }
 
 function onPanelClose() {
@@ -85,7 +70,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('mouseup', onMouseUp)
-  if (hideTimer) clearTimeout(hideTimer)
 })
 </script>
 
@@ -96,7 +80,6 @@ onBeforeUnmount(() => {
       :x="dotPosition.x"
       :y="dotPosition.y"
       @hover-enter="onDotHoverEnter"
-      @hover-leave="onHoverLeave"
     />
     <CheckerPanel
       v-if="showPanel"
@@ -104,8 +87,6 @@ onBeforeUnmount(() => {
       :dot-x="dotPosition.x"
       :dot-y="dotPosition.y"
       @close="onPanelClose"
-      @hover-enter="onPanelHoverEnter"
-      @hover-leave="onHoverLeave"
     />
   </div>
 </template>
