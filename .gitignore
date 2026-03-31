@@ -6,3 +6,6 @@ docs/.vitepress/cache/
 
 dist/
 docs/dev-dist/
+
+# Superpowers brainstorm artifacts
+.superpowers/

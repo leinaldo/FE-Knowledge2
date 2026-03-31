@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useData } from 'vitepress'
 import ApiKeySettings from './ApiKeySettings.vue'
 
@@ -45,6 +45,34 @@ const errorText = ref('')
 const dragOffset = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
 const dragStart = { x: 0, y: 0, offsetX: 0, offsetY: 0 }
+
+// Viewport boundary state
+const flipped = ref(false)
+const shiftLeft = ref(0)
+const panelHeight = ref(200)
+
+const panelStyle = computed(() => {
+  const baseX = props.dotX + dragOffset.value.x - shiftLeft.value
+  const baseY = flipped.value
+    ? props.dotY - panelHeight.value - 10 + dragOffset.value.y
+    : props.dotY + 20 + dragOffset.value.y
+
+  return {
+    left: baseX + 'px',
+    top: baseY + 'px',
+  }
+})
+
+function updateBounds() {
+  if (!panelRef.value) return
+  const rect = panelRef.value.getBoundingClientRect()
+  panelHeight.value = rect.height
+
+  flipped.value = (props.dotY + 20 + rect.height - window.scrollY) > window.innerHeight
+
+  const rightOverflow = (props.dotX + rect.width) - (window.scrollX + window.innerWidth)
+  shiftLeft.value = rightOverflow > 0 ? rightOverflow + 16 : 0
+}
 
 let abortController: AbortController | null = null
 
@@ -223,7 +251,10 @@ function onDragEnd() {
 // Auto-check on mount when text changes
 watch(() => props.text, () => {
   dragOffset.value = { x: 0, y: 0 }
+  flipped.value = false
+  shiftLeft.value = 0
   checkContent()
+  nextTick(() => setTimeout(updateBounds, 50))
 }, { immediate: true })
 
 onBeforeUnmount(() => {
@@ -238,10 +269,7 @@ onBeforeUnmount(() => {
     ref="panelRef"
     class="checker-panel"
     :class="{ dark: isDark }"
-    :style="{
-      left: (dotX + dragOffset.x) + 'px',
-      top: (dotY + 20 + dragOffset.y) + 'px',
-    }"
+    :style="panelStyle"
   >
     <!-- Title bar (draggable) -->
     <div class="panel-header" @mousedown.prevent="onDragStart">
