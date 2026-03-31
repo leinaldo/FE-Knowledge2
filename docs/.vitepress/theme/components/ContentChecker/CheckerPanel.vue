@@ -225,17 +225,21 @@ function onDragMove(e: MouseEvent) {
   const newX = dragStart.offsetX + dx
   const newY = dragStart.offsetY + dy
 
-  // Clamp to viewport
+  // Clamp to viewport (account for scroll position since panel uses document-absolute coords)
   if (panelRef.value) {
     const rect = panelRef.value.getBoundingClientRect()
-    const maxX = window.innerWidth - rect.width
-    const maxY = window.innerHeight - rect.height
-    const panelBaseX = props.dotX
-    const panelBaseY = props.dotY + 20
+    const minDocX = window.scrollX
+    const minDocY = window.scrollY
+    const maxDocX = window.scrollX + window.innerWidth - rect.width
+    const maxDocY = window.scrollY + window.innerHeight - rect.height
+    const panelBaseX = props.dotX - shiftLeft.value
+    const panelBaseY = flipped.value
+      ? props.dotY - panelHeight.value - 10
+      : props.dotY + 20
 
     dragOffset.value = {
-      x: Math.max(-panelBaseX, Math.min(newX, maxX - panelBaseX)),
-      y: Math.max(-panelBaseY, Math.min(newY, maxY - panelBaseY)),
+      x: Math.max(minDocX - panelBaseX, Math.min(newX, maxDocX - panelBaseX)),
+      y: Math.max(minDocY - panelBaseY, Math.min(newY, maxDocY - panelBaseY)),
     }
   } else {
     dragOffset.value = { x: newX, y: newY }
