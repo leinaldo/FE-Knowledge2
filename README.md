@@ -63,26 +63,8 @@ yarn docs:serve
 - [Tailwind CSS](https://tailwindcss.com/) - 样式
 - [Algolia](https://www.algolia.com/) - 文档搜索
 - [Giscus](https://giscus.app/) - 评论系统
-- [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) - PWA 支持
 
 ---
-
-## 待完善内容
-
-**功能**
-- [ ] 自定义主题
-
-**文章**
-- [ ] 计算机网络：HTTP 深入、TCP 深入
-- [ ] 前后端通信：REST / GraphQL / gRPC / tRPC 完整对比
-- [ ] 浏览器原理深入
-- [ ] 基础三大件完整指南（HTML / CSS / JS）
-- [ ] Web3D：WebGL、WebGPU
-- [ ] 框架：Svelte
-- [ ] 工具链：Webpack 深入、Rspack
-- [ ] 埋点体系
-- [ ] 跨平台：React Native、Flutter、Taro
-- [ ] 算法：并查集、动态规划
 
 ---
 
