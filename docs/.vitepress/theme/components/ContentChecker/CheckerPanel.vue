@@ -64,7 +64,9 @@ function getConfig() {
   return stored ? JSON.parse(stored) : null
 }
 
-async function streamRequest(systemPrompt: string) {
+let lastCheckResult = ''
+
+async function streamRequest(systemPrompt: string, extraContext?: string) {
   if (!hasConfig()) {
     showSettings.value = true
     return
@@ -94,7 +96,13 @@ async function streamRequest(systemPrompt: string) {
         stream: true,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: inputText },
+          ...(extraContext
+            ? [
+                { role: 'user', content: inputText },
+                { role: 'assistant', content: extraContext },
+                { role: 'user', content: '请根据以上检查结果，对原文进行增强改写。' },
+              ]
+            : [{ role: 'user', content: inputText }]),
         ],
       }),
       signal: abortController.signal,
@@ -148,12 +156,13 @@ async function streamRequest(systemPrompt: string) {
   }
 }
 
-function checkContent() {
-  streamRequest(CHECK_PROMPT)
+async function checkContent() {
+  await streamRequest(CHECK_PROMPT)
+  lastCheckResult = responseText.value
 }
 
 function enhanceContent() {
-  streamRequest(ENHANCE_PROMPT)
+  streamRequest(ENHANCE_PROMPT, lastCheckResult || undefined)
 }
 
 function cancelRequest() {
