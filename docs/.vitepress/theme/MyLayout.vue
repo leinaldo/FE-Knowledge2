@@ -1,6 +1,7 @@
 <script setup>
 import DefaultTheme from 'vitepress/theme'
 import CommentGiscus from './components/CommentGiscus.vue'
+import ContentChecker from './components/ContentChecker/ContentChecker.vue'
 import { setupToggleAppearance } from './plugins/setupToggleApperance';
 
 
@@ -16,4 +17,7 @@ setupToggleAppearance()
       <CommentGiscus />
     </template>
   </Layout>
+  <ClientOnly>
+    <ContentChecker />
+  </ClientOnly>
 </template>
