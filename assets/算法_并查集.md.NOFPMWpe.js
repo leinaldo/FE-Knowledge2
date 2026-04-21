@@ -1,0 +1,1 @@
+import{_ as e,o as t,a}from"./chunks/framework.CYBiNvwM.js";const m=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"算法/并查集.md","filePath":"算法/并查集.md","lastUpdated":1693156821000}'),r={name:"算法/并查集.md"};function o(s,n,c,_,d,p){return t(),a("div")}const f=e(r,[["render",o]]);export{m as __pageData,f as default};

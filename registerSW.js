@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/FE-Knowledge2/sw.js', { scope: '/FE-Knowledge2/' })})}
